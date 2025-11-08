@@ -1,0 +1,60 @@
+services:
+  db:
+    image: postgres:18
+    restart: always
+    container_name: resume-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+    volumes:
+      - pgdata:/var/lib/postgresql/postgresql
+
+  alembic:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      [
+        "alembic",
+        "-c", "core/alembic.ini",
+        "-x", "container=true",
+        "upgrade", "head"
+      ]
+
+  backend:
+    build: .
+    container_name: resume-backend
+    depends_on:
+      alembic:
+        condition: service_completed_successfully
+    command: >
+      sh -c "python -m watcher start_backend"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+
+  bot:
+    build: .
+    container_name: resume-bot
+    depends_on:
+      backend:
+        condition: service_started
+    command: python -m watcher start_bot
+    volumes:
+      - .:/app
+    tty: true
+    env_file:
+      - .env
+
+volumes:
+  pgdata:
