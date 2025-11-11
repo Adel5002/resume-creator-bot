@@ -26,7 +26,7 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["bot", "core", "scripts"]
+packages = ["bot", "core", "scripts", "backend"]
 
 [tool.mypy]
 python_version = "3.12"

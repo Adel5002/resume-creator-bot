@@ -1,7 +1,9 @@
 import datetime
 
+from typing import List
+
 from sqlalchemy import String, DateTime, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from core.models.base import Base
 
@@ -19,6 +21,12 @@ class User(Base):
     last_seen: Mapped[datetime.datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True
+    )
+
+    resumes: Mapped[List["Resume"]] = relationship(
+        back_populates="user",
+        lazy="selectin",
+        cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

@@ -1,5 +1,9 @@
 from datetime import datetime, UTC
 from pydantic import BaseModel, ConfigDict
+from typing import List
+
+from core.schemas.resume_schema import ResumeRead
+
 
 class UserBase(BaseModel):
     name: str
@@ -15,4 +19,6 @@ class UserUpdate(BaseModel):
 class UserRead(UserBase):
     telegram_id: int
     last_seen: datetime | None
+    resumes: List["ResumeRead"] | None
+
     model_config = ConfigDict(from_attributes=True)

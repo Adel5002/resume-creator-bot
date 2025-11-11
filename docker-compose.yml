@@ -17,25 +17,10 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/postgresql
 
-  alembic:
-    build: .
-    depends_on:
-      db:
-        condition: service_healthy
-    command:
-      [
-        "alembic",
-        "-c", "core/alembic.ini",
-        "-x", "container=true",
-        "upgrade", "head"
-      ]
 
   backend:
     build: .
     container_name: resume-backend
-    depends_on:
-      alembic:
-        condition: service_completed_successfully
     command: >
       sh -c "python -m watcher start_backend"
     volumes:
