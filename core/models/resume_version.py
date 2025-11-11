@@ -24,7 +24,7 @@ class ResumeVersion(Base):
     resume_id: Mapped[int] = mapped_column(ForeignKey("resume.id", ondelete="CASCADE"))
     resume: Mapped["Resume"] = relationship(back_populates="versions")
 
-    profile: Mapped["Profile"] = relationship(back_populates="version")
+    profile: Mapped["Profile"] = relationship(back_populates="version", lazy="selectin")
 
     def __repr__(self) -> str:
         return (f""

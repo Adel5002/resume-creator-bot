@@ -1,8 +1,8 @@
 """init db
 
-Revision ID: c59e036754d9
+Revision ID: 3124b6cc3bd3
 Revises: 
-Create Date: 2025-11-11 08:27:00.564963
+Create Date: 2025-11-11 13:46:27.800535
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'c59e036754d9'
+revision: str = '3124b6cc3bd3'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -32,7 +32,6 @@ def upgrade() -> None:
     sa.Column('id', sa.Integer(), nullable=False),
     sa.Column('title', sa.String(), nullable=False),
     sa.Column('creation_mode', sa.Enum('NEW', 'IMPORTED', 'TEMPLATE', name='resumecreationmode'), nullable=False),
-    sa.Column('source_file_path', sa.String(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.ForeignKeyConstraint(['user_id'], ['tg_user.telegram_id'], ondelete='CASCADE'),
@@ -52,7 +51,7 @@ def upgrade() -> None:
     )
     op.create_table('profile',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
-    sa.Column('name', sa.String(length=255), nullable=False),
+    sa.Column('name', sa.String(length=255), nullable=True),
     sa.Column('position', sa.String(length=255), nullable=True),
     sa.Column('contacts', sa.JSON(), nullable=True),
     sa.Column('summary', sa.Text(), nullable=True),

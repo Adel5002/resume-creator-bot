@@ -1,6 +1,8 @@
 from datetime import datetime, UTC
 from pydantic import BaseModel, ConfigDict
 
+from core.schemas.profile_schema import ProfileRead
+
 
 class ResumeVersionBase(BaseModel):
     version: int
@@ -26,6 +28,7 @@ class ResumeVersionUpdate(BaseModel):
 class ResumeVersionRead(ResumeVersionBase):
     id: int
     resume_id: int
-    created_at: datetime = datetime.now(UTC)
+    created_at: datetime
+    profile: ProfileRead | None = None
 
     model_config = ConfigDict(from_attributes=True)
