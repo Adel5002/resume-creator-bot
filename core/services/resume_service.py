@@ -71,7 +71,6 @@ class ResumeService:
         await ResumeService.create_resume_version(
             data, session, resume_id=resume.id, version=max_version.version + 1
         )
-        print(f'FFFFFFFFF {resume.versions}')
 
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
