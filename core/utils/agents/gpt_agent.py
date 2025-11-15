@@ -8,13 +8,15 @@ from agents.extensions.memory.redis_session import RedisSession
 from dotenv import load_dotenv
 from openai import RateLimitError
 
+from core.utils.redis_cache import redis_cache
+
 
 class ResumeService:
     def __init__(
             self,
             redis_client,
             instruction_dir: Union[str, Path],
-            backup_models: list[str] = ["gpt-5","gpt-5-chat-latest"]
+            backup_models: list[str] = ["gpt-5","gpt-5-chat-latest","gpt-5.1","gpt-5.1-chat-latest"]
     ):
         load_dotenv()
 
@@ -33,7 +35,6 @@ class ResumeService:
             instructions=instructions,
             model=agent_model,
             model_settings=ModelSettings(
-                top_p=1,
                 max_tokens=8192,
                 store=True,
             ),
@@ -62,7 +63,7 @@ class ResumeService:
                 )
                 result = await Runner.run(agent, input=input_resume, session=session)
                 await self.redis_client.set(f"resume:html:{user_id}", result.final_output)
-                return result.final_output
+                return json.loads(result.final_output)
 
             except Exception as e:
                 last_error = e
@@ -98,7 +99,7 @@ class ResumeService:
                 result = await Runner.run(agent, input=input_data, session=session)
                 await self.redis_client.set(f"resume:html:{user_id}", result.final_output)
 
-                return result.final_output
+                return json.loads(result.final_output)
 
             except RateLimitError as e:
                 last_error = e
@@ -108,12 +109,16 @@ class ResumeService:
 
     async def clear_user_session(self, user_id: int) -> None:
         """Удаление сессий пользователя после завершения работы."""
+        print(await redis_cache.keys())
         redis_keys = [
-            f"resume_session:{user_id}",
+            f"agents:session:resume_session:{user_id}",
+            f"agents:session:resume_session:{user_id}:messages",
             f"resume:html:{user_id}",
         ]
         for key in redis_keys:
             await self.redis_client.delete(key)
+
+        print(await redis_cache.keys())
 
 async def main():
     from core.utils.redis_cache import redis_cache
@@ -122,9 +127,8 @@ async def main():
     resume_service = ResumeService(redis_client=redis_cache, instruction_dir=instructions_dir)
     # await resume_service.clear_user_session(1)
     # result = await resume_service.create_resume(1, json.dumps(input_resume, ensure_ascii=False))
-    result = await resume_service.edit_resume(1, 'Сделай дизайн еще красивее')
+    result = await resume_service.edit_resume(1, 'Сделай цвет блока шапки нейтральным, немного сероватым')
     print(result)
-    print(json.loads(result))
     await redis_cache.aclose(close_connection_pool=True)
 
 if __name__ == "__main__":
@@ -136,7 +140,7 @@ if __name__ == "__main__":
             "name": "Иван",
             "surname": "Иванов",
             "patronymic": "Сергеевич",
-            "photo": None,
+            "photo": "C:/Users/Admin/Downloads/photo_2025-11-09_15-10-48.jpg",
             "dateOfBirth": "1998-06-12"
         },
         "experience": [
