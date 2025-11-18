@@ -23,6 +23,7 @@ class ProfileUpdate(BaseModel):
     skills: list[str] | None = None
     experience: list[dict] | None = None
     education: list[dict] | None = None
+    instructions: str | None = None
 
 
 class ProfileRead(ProfileBase):

@@ -1,3 +1,3 @@
 from redis.asyncio import Redis
 
-redis_cache = Redis(host="localhost", port=6379)
+redis_cache = Redis(host="redis", port=6379)
