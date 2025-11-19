@@ -27,73 +27,105 @@ class ResumeService:
             resume_id: int,
             version: int = 1,
     ) -> ResumeVersion:
+        async def create_version_object(resume_data, resume_id, version) -> ResumeVersion:
+            version_data = ResumeVersionBase(
+                **resume_data.model_dump(exclude={"version", "resume_id"}),
+                version=version,
+                resume_id=resume_id
+            )
+            return ResumeVersion(**version_data.model_dump(exclude_none=True))
 
-        version_data = ResumeVersionBase(
-            **resume_data.model_dump(exclude={"version", "resume_id"}),
-            version=version,
-            resume_id=resume_id
-        )
+        async def handle_profile_update(resume_data, session, resume_id, version_model) -> Profile:
+            last_profile = await session.scalar(
+                select(Profile)
+                .where(ResumeVersion.resume_id == resume_id)
+                .order_by(Profile.id.desc())
+            )
 
-        version_model = ResumeVersion(**version_data.model_dump(exclude_none=True))
+            profile = ProfileBase(**resume_data.model_dump(exclude_none=True))
 
-        session.add(version_model)
-        await session.flush()
+            if not last_profile:
+                profile_model = Profile(**profile.model_dump(exclude_none=True), version_id=version_model.id)
+                session.add(profile_model)
+            else:
+                profile_dict = {column.name: getattr(last_profile, column.name)
+                                for column in Profile.__table__.columns}
 
-        path_to_instructions = os.path.join(Path(__file__).parent.parent, "utils/agents/agent_instructions")
+                profile_data = {
+                    key: profile.model_dump().get(key) if profile.model_dump().get(
+                        key) is not None else profile_dict.get(
+                        key)
+                    for key in profile_dict.keys() | profile.model_dump().keys()
+                }
 
-        resume_service = ResumeServiceAgent(redis_client=redis_cache, instruction_dir=path_to_instructions)
+                profile_data.pop("version_id")
+                profile_data.pop("id")
 
-        last_profile = await session.scalar(select(Profile).order_by(Profile.id.desc()))
-        profile = ProfileBase(**resume_data.model_dump(exclude_none=True))
+                logger.info(f"Last profile: {profile_data}")
+                profile_model = Profile(**profile_data, version_id=version_model.id)
+                session.add(profile_model)
 
-        if not last_profile:
-            profile_model = Profile(**profile.model_dump(exclude_none=True), version_id=version_model.id)
-            session.add(profile_model)
-        else:
-            profile_dict = {column.name: getattr(last_profile, column.name)
+            await session.flush()
+            return profile_model
+
+        async def process_resume_service_call(resume_service, action, **kwargs) -> str:
+            try:
+                if action == "create_resume":
+                    return await resume_service.create_resume(**kwargs)
+                elif action == "edit_resume":
+                    return await resume_service.edit_resume(**kwargs)
+            except Exception as e:
+                logger.error(f"Error in {action}: {e}")
+                raise
+
+        try:
+            version_model = await create_version_object(resume_data, resume_id, version)
+            session.add(version_model)
+            await session.flush()
+
+            profile_model = await handle_profile_update(resume_data, session, resume_id, version_model)
+
+            path_to_instructions = os.path.join(Path(__file__).parent.parent, "utils/agents/agent_instructions")
+            resume_service = ResumeServiceAgent(redis_client=redis_cache, instruction_dir=path_to_instructions)
+
+            profile_dict = {column.name: getattr(profile_model, column.name)
                             for column in Profile.__table__.columns}
 
-            profile_data = {
-                key: profile.model_dump().get(key) if profile.model_dump().get(key) is not None else profile_dict.get(key)
-                for key in profile_dict.keys() | profile.model_dump().keys()
-            }
+            profile_dict.pop("version_id")
+            profile_dict.pop("id")
 
-            profile_data.pop("version_id")
-            profile_data.pop("id")
+            logger.info(profile_dict)
 
-            logger.info(f"Last profile: {profile_data}")
-            profile_model = Profile(**profile_data, version_id=version_model.id)
-            session.add(profile_model)
-
-            if isinstance(resume_data, ResumeUpdate):
-                logger.info(f"Update resume {resume_id}")
+            if isinstance(resume_data, ResumeCreate):
+                version_model.path_to_html = await process_resume_service_call(
+                    resume_service,
+                    action="create_resume",
+                    user_id=resume_data.user_id,
+                    resume_id=resume_id,
+                    input_resume=json.dumps(profile_dict)
+                )
+            elif isinstance(resume_data, ResumeUpdate):
                 resume = await session.scalar(select(Resume).where(Resume.id == resume_id))
-                path_to_html = await (resume_service.edit_resume(
+                version_model.path_to_html = await process_resume_service_call(
+                    resume_service,
+                    action="edit_resume",
                     user_id=resume.user_id,
-                    instruction={"json": json.dumps(profile_data), "prompt": resume_data.instructions},
+                    instruction={"json": json.dumps(profile_dict), "prompt": resume_data.instructions},
                     version=resume.versions[-1].version,
                     resume_id=resume.id
                 )
-                )
-                version_model.path_to_html = path_to_html
-                session.add(version_model)
 
-        if isinstance(resume_data, ResumeCreate):
-            path_to_html = await resume_service.create_resume(
-                user_id=resume_data.user_id,
-                resume_id=resume_id,
-                input_resume=json.dumps(profile.model_dump())
-            )
-            version_model.path_to_html = path_to_html
-            session.add(version_model)
+            await session.commit()
 
+            await session.refresh(version_model)
+            await session.refresh(profile_model)
 
-        await session.commit()
-        await session.refresh(version_model)
-        await session.refresh(profile_model)
+            return version_model
 
-
-        return version_model
+        except Exception as e:
+            logger.error(f"Error in create_resume_version: {e}")
+            await session.rollback()
+            raise
 
     @staticmethod
     async def create(data: ResumeCreate, session: AsyncSession) -> Resume:
@@ -104,7 +136,7 @@ class ResumeService:
 
         resume = ResumeBase(**data.model_dump(exclude={"user_id"}))
 
-        resume = Resume(**resume.model_dump(),user_id=data.user_id)
+        resume = Resume(**resume.model_dump(), user_id=data.user_id)
         session.add(resume)
         await session.commit()
         await session.refresh(resume)

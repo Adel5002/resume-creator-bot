@@ -27,7 +27,6 @@ class ResumeServiceAgent:
         self.backup_models = backup_models
 
     def _initialize_agent(self, name: str, instructions: str, agent_model: str = "gpt-5") -> Agent:
-        print(agent_model)
         return Agent(
             name=name,
             instructions=instructions,
@@ -44,7 +43,7 @@ class ResumeServiceAgent:
             return file.read()
 
     async def create_resume(self, user_id: int, resume_id: int, input_resume: Optional[str] = None) -> str:
-        await ResumeServiceAgent.clear_user_session(self, 1)
+        await ResumeServiceAgent.clear_user_session(self, user_id)
         session = RedisSession(
             f"resume_session:{user_id}",
             redis_client=self.redis_client,
@@ -99,8 +98,7 @@ class ResumeServiceAgent:
 
         resume_html = await self.redis_client.get(f"resume:html:{user_id}:{version}")
         if resume_html is None:
-            print("No resume html!!!!")
-            return None
+            raise Exception("HTML code does not exist in Redis. Please, create resume first.")
 
         session = RedisSession(
             f"resume_session:{user_id}",
@@ -108,7 +106,10 @@ class ResumeServiceAgent:
             ttl=60 * 60 * 24 * 7,
         )
 
-        data = {"html_code": json.loads(resume_html)["html_code"], "user_request": json.dumps(instruction)}
+        data = {
+            "html_code": json.loads(resume_html).get("html_code", json.loads(resume_html)),
+            "user_request": json.dumps(instruction)
+        }
         input_data = json.dumps(data)
 
         last_error = None
@@ -140,7 +141,6 @@ class ResumeServiceAgent:
 
     async def clear_user_session(self, user_id: int) -> None:
         """Удаление сессий пользователя после завершения работы."""
-        print(await self.redis_client.keys())
         redis_keys = [
             f"agents:session:resume_session:{user_id}",
             f"agents:session:resume_session:{user_id}:messages",
@@ -156,7 +156,6 @@ class ResumeServiceAgent:
             if cursor == 0:
                 break
 
-        print(await self.redis_client.keys())
 
 async def main():
     from core.utils.redis_cache import redis_cache
